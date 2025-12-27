@@ -31,6 +31,10 @@ export default function HomeScreen({ navigation }) {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
+      fetch("https://financasback.onrender.com")
+        .then(() => console.log("🟢 Backend acordado"))
+        .catch(() => console.log("⚠️ Falha ao acordar o backend"));
+
       buscarDados();
     });
     return unsubscribe;
