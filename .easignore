@@ -1,0 +1,22 @@
+# Ignorar tudo que não é necessário pro build
+node_modules
+.expo
+.expo-shared
+.git
+android
+ios
+web-build
+build
+dist
+*.log
+*.tmp
+*.iml
+*.db
+*.ldb
+*.lock
+*.bak
+*.zip
+*.tar
+*.gz
+*.rar
+AppData/
