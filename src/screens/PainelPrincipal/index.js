@@ -143,22 +143,6 @@ export default function PainelPrincipal({ route, navigation }) {
                 <Text style={styles.btnActionText}>Extrato Geral (Todos)</Text>
               </TouchableOpacity>
 
-              {/* Botão 2: Extrato Principal (Apenas Principal) */}
-              <TouchableOpacity
-                style={[styles.btnAction, { marginTop: 10 }]}
-                onPress={() =>
-                  navigation.navigate("Extrato", {
-                    caixaId,
-                    caixaNome: "Principal", // Força o nome Principal
-                  })
-                }
-              >
-                <FontAwesome name="star" size={24} color="#ffeaa7" />
-                <Text style={[styles.btnActionText, { color: "#ffeaa7" }]}>
-                  Extrato Principal
-                </Text>
-              </TouchableOpacity>
-
               {/* Botão Ver por Categorias */}
               <TouchableOpacity
                 style={[
@@ -169,6 +153,7 @@ export default function PainelPrincipal({ route, navigation }) {
                   navigation.navigate("RelatorioCategorias", {
                     caixaId,
                     caixaNome: "Principal",
+                    saldoTotal,
                   })
                 }
               >
@@ -213,8 +198,19 @@ export default function PainelPrincipal({ route, navigation }) {
                 ]}
                 onPress={() => navigation.navigate("RelatorioPdf")}
               >
-                <FontAwesome name="plus" size={24} color="#fff" />
-                <Text style={styles.btnActionText}>Novo Lançamento</Text>
+                <FontAwesome name="file-text-o" size={24} color="#fff" />
+                <Text style={styles.btnActionText}>Relatório</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.btnAction,
+                  { backgroundColor: "#a3b800ff", marginTop: 10 },
+                ]}
+                onPress={() => navigation.navigate("Adicionais")}
+              >
+                <FontAwesome name="ellipsis-h" size={24} color="#fff" />
+                <Text style={styles.btnActionText}>Adicionais</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -227,7 +223,7 @@ export default function PainelPrincipal({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 50,
   },
   cardSaldo: {
     backgroundColor: "#2d3436",
@@ -265,7 +261,7 @@ const styles = StyleSheet.create({
   cardResumo: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 15,
+    padding: 7,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",

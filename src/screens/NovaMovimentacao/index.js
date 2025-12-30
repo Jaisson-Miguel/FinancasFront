@@ -25,6 +25,7 @@ const CATEGORIAS_DISPONIVEIS = [
   "Metas",
   "Entrada",
   "Empréstimos",
+  "Inicio",
 ];
 
 export default function NovaMovimentacao({ route, navigation }) {

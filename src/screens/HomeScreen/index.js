@@ -30,13 +30,22 @@ export default function HomeScreen({ navigation }) {
   };
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
-      fetch("https://financasback.onrender.com")
-        .then(() => console.log("🟢 Backend acordado"))
-        .catch(() => console.log("⚠️ Falha ao acordar o backend"));
+    const acordarBackend = async () => {
+      try {
+        const res = await fetch("https://financasback.onrender.com");
+        console.log("🟢 Backend acordado");
+      } catch (err) {
+        console.log("⚠️ Falha ao acordar o backend:", err.message);
+      }
+    };
 
-      buscarDados();
+    acordarBackend(); // Ping inicial
+    buscarDados(); // Dados locais
+
+    const unsubscribe = navigation.addListener("focus", () => {
+      buscarDados(); // Atualiza ao voltar pra Home
     });
+
     return unsubscribe;
   }, [navigation]);
 
@@ -130,19 +139,6 @@ export default function HomeScreen({ navigation }) {
             >
               <FontAwesome name="dollar" size={32} color="#fff" />
               <Text style={styles.btnText}>Caixas Secundários</Text>
-            </TouchableOpacity>
-
-            {/* 3. REGISTRAR MOVIMENTAÇÃO */}
-            <TouchableOpacity
-              style={[
-                styles.moneyButton,
-                { backgroundColor: "#c0392b" },
-                !principalId && { opacity: 0.6 },
-              ]}
-              onPress={handleNavegarMovimentacao}
-            >
-              <FontAwesome name="money" size={32} color="#fff" />
-              <Text style={styles.btnText}>Registrar Movimentação</Text>
             </TouchableOpacity>
 
             {/* 4. CONTAS A PAGAR */}

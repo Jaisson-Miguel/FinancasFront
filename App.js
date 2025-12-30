@@ -15,9 +15,10 @@ import CriarConta from "./src/screens/CriarConta";
 import GerenciarContas from "./src/screens/GerenciarContas";
 import TelaPagamento from "./src/screens/TelaPagamento";
 import PainelPrincipal from "./src/screens/PainelPrincipal";
-import RelatorioCategorias from "./src/screens/RelaorioCategorias";
+import RelatorioCategorias from "./src/screens/RelatorioCategorias";
 import Contador from "./src/screens/Contador";
 import RelatorioPdf from "./src/screens/RelatorioPdf";
+import Adicionais from "./src/screens/Adicionais";
 
 const Stack = createNativeStackNavigator();
 
@@ -37,6 +38,7 @@ export default function App() {
         <Stack.Screen name="PainelPrincipal" component={PainelPrincipal} />
         <Stack.Screen name="Contador" component={Contador} />
         <Stack.Screen name="RelatorioPdf" component={RelatorioPdf} />
+        <Stack.Screen name="Adicionais" component={Adicionais} />
         <Stack.Screen
           name="RelatorioCategorias"
           component={RelatorioCategorias}

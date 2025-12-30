@@ -6,80 +6,100 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
-  TouchableOpacity,
 } from "react-native";
 import { FontAwesome } from "@expo/vector-icons";
 import Header from "./../../components/Header";
 import API_URL from "./../../config";
-
 export default function RelatorioCategorias({ route, navigation }) {
-  // Mantemos o parâmetro apenas para compatibilidade visual do título
-  const { caixaNome } = route.params || {};
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Estados separados para as listas e totais
   const [listaGastos, setListaGastos] = useState([]);
   const [listaEmprestimos, setListaEmprestimos] = useState([]);
+  const [listaInicio, setListaInicio] = useState([]);
+  const [listaEntradas, setListaEntradas] = useState([]);
   const [totalGastos, setTotalGastos] = useState(0);
   const [totalEmprestimos, setTotalEmprestimos] = useState(0);
-
+  const [totalInicio, setTotalInicio] = useState(0);
+  const [totalEntradas, setTotalEntradas] = useState(0);
   useEffect(() => {
     carregarDados();
   }, []);
-
   const carregarDados = async () => {
     try {
       if (!refreshing) setLoading(true);
-
-      // Busca o relatório geral do backend
-      // O backend agora retorna TUDO que é gasto (negativo) OU categoria "Empréstimo"
       const response = await fetch(
-        `${API_URL}/extrato/categorias?t=${new Date().getTime()}`
+        `${API_URL}/extrato/categorias?t=${Date.now()}`
       );
-      const data = await response.json();
+      const { categorias, totalEntrada } = await response.json();
 
-      if (Array.isArray(data)) {
-        // 1. Separa o que é Empréstimo do resto
-        const apenasEmprestimos = data.filter(
+      if (Array.isArray(categorias)) {
+        const apenasEmprestimos = categorias.filter(
           (item) => item._id === "Empréstimos"
         );
-        const apenasGastos = data.filter((item) => item._id !== "Empréstimos");
+        const apenasInicio = categorias.filter((item) => item._id === "Inicio");
+        const apenasEntradas = categorias.filter(
+          (item) => item._id === "entrada"
+        );
+        const apenasGastos = categorias.filter(
+          (item) =>
+            item._id !== "Empréstimos" &&
+            item._id !== "Inicio" &&
+            item._id !== "entrada"
+        );
 
-        // 2. Calcula Totais e Formata GASTOS
-        // Para gastos, o valor vem negativo, convertemos para positivo para exibir
+        // GASTOS
         const totalG = apenasGastos.reduce(
           (acc, item) => acc + Math.abs(item.total),
           0
         );
         setTotalGastos(totalG);
+        setListaGastos(
+          apenasGastos.map((item) => ({
+            nome: item._id || "Outros",
+            valor: item.total,
+            valorAbsoluto: Math.abs(item.total),
+          }))
+        );
 
-        const gastosFormatados = apenasGastos.map((item) => ({
-          nome: item._id || "Outros",
-          valor: item.total, // Mantém o valor original (negativo)
-          valorAbsoluto: Math.abs(item.total),
-        }));
-        setListaGastos(gastosFormatados);
-
-        // 3. Calcula Totais e Formata EMPRÉSTIMOS
-        // Empréstimos podem ser positivos (recebeu) ou negativos (enviou)
-        // Aqui somamos o valor líquido
+        // EMPRÉSTIMOS
         const totalE = apenasEmprestimos.reduce(
           (acc, item) => acc + item.total,
           0
         );
         setTotalEmprestimos(totalE);
+        setListaEmprestimos(
+          apenasEmprestimos.map((item) => ({
+            nome: item._id,
+            valor: item.total,
+            valorAbsoluto: Math.abs(item.total),
+          }))
+        );
 
-        const emprestimosFormatados = apenasEmprestimos.map((item) => ({
-          nome: item._id, // Será "Empréstimo"
-          valor: item.total,
-          valorAbsoluto: Math.abs(item.total),
-        }));
-        setListaEmprestimos(emprestimosFormatados);
+        // INÍCIO
+        const totalI = apenasInicio.reduce((acc, item) => acc + item.total, 0);
+        setTotalInicio(totalI);
+        setListaInicio(
+          apenasInicio.map((item) => ({
+            nome: item._id,
+            valor: item.total,
+            valorAbsoluto: Math.abs(item.total),
+          }))
+        );
+
+        // ENTRADAS
+        setListaEntradas([
+          {
+            nome: "Entradas Diretas",
+            valor: totalEntrada,
+            valorAbsoluto: Math.abs(totalEntrada),
+          },
+        ]);
+        setTotalEntradas(totalEntrada || 0);
       } else {
         setListaGastos([]);
         setListaEmprestimos([]);
+        setListaInicio([]);
+        setListaEntradas([]);
       }
     } catch (error) {
       console.error("Erro ao carregar relatório:", error);
@@ -88,23 +108,16 @@ export default function RelatorioCategorias({ route, navigation }) {
       setRefreshing(false);
     }
   };
-
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     carregarDados();
   }, []);
-
-  // Função auxiliar para renderizar cada item da lista
   const renderCategoriaItem = (item, totalReferencia, corBarra) => {
-    // Evita divisão por zero
     const porcentagem =
       totalReferencia === 0
         ? 0
         : (item.valorAbsoluto / Math.abs(totalReferencia)) * 100;
-
-    // Se for valor positivo (entrada/pagamento de empréstimo), fica verde. Se negativo, vermelho.
     const corValor = item.valor >= 0 ? "#00b894" : "#d63031";
-
     return (
       <View key={item.nome} style={styles.card}>
         <View style={styles.cardHeader}>
@@ -118,8 +131,6 @@ export default function RelatorioCategorias({ route, navigation }) {
             R$ {Math.abs(item.valor).toFixed(2).replace(".", ",")}
           </Text>
         </View>
-
-        {/* Barra de Progresso */}
         <View style={styles.progressContainer}>
           <View
             style={[
@@ -134,7 +145,6 @@ export default function RelatorioCategorias({ route, navigation }) {
       </View>
     );
   };
-
   return (
     <View style={styles.container}>
       <Header
@@ -142,12 +152,11 @@ export default function RelatorioCategorias({ route, navigation }) {
         showBack={true}
         navigation={navigation}
       />
-
       {loading ? (
         <ActivityIndicator
           size="large"
-          color="#2d3436"
-          style={{ marginTop: 50 }}
+          color="#0984e3"
+          style={{ marginTop: 40 }}
         />
       ) : (
         <ScrollView
@@ -156,23 +165,56 @@ export default function RelatorioCategorias({ route, navigation }) {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          {/* --- BLOCO 1: GASTOS OPERACIONAIS --- */}
+          {/* ENTRADAS DIRETAS */}
+          {totalEntradas > 0 && (
+            <>
+              <View style={[styles.sectionHeader, styles.sectionEntrada]}>
+                <Text style={[styles.sectionTitle, { color: "#00b894" }]}>
+                  Entradas Diretas
+                </Text>
+                <Text style={[styles.sectionTotal, { color: "#00b894" }]}>
+                  R$ {Math.abs(totalEntradas).toFixed(2).replace(".", ",")}
+                </Text>
+              </View>
+              {listaEntradas.map((item) =>
+                renderCategoriaItem(item, totalEntradas, "#00b894")
+              )}
+            </>
+          )}
+
+          {/* GASTOS */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Gastos Operacionais</Text>
             <Text style={styles.sectionTotal}>
               R$ {totalGastos.toFixed(2).replace(".", ",")}
             </Text>
           </View>
-
-          {listaGastos.length === 0 && listaEmprestimos.length === 0 ? (
+          {listaGastos.length === 0 &&
+          listaEmprestimos.length === 0 &&
+          listaInicio.length === 0 ? (
             <Text style={styles.emptyText}>Nenhum dado encontrado.</Text>
           ) : (
             listaGastos.map((item) =>
               renderCategoriaItem(item, totalGastos, "#2d3436")
             )
           )}
-
-          {/* --- BLOCO 2: EMPRÉSTIMOS --- */}
+          {/* INÍCIO */}
+          {listaInicio.length > 0 && (
+            <>
+              <View style={[styles.sectionHeader, styles.sectionInicio]}>
+                <Text style={[styles.sectionTitle, { color: "#6c5ce7" }]}>
+                  Saldos Iniciais
+                </Text>
+                <Text style={[styles.sectionTotal, { color: "#6c5ce7" }]}>
+                  R$ {Math.abs(totalInicio).toFixed(2).replace(".", ",")}
+                </Text>
+              </View>
+              {listaInicio.map((item) =>
+                renderCategoriaItem(item, totalInicio, "#6c5ce7")
+              )}
+            </>
+          )}
+          {/* EMPRÉSTIMOS */}
           {listaEmprestimos.length > 0 && (
             <>
               <View style={[styles.sectionHeader, styles.sectionEmprestimo]}>
@@ -182,15 +224,12 @@ export default function RelatorioCategorias({ route, navigation }) {
                 <Text
                   style={[
                     styles.sectionTotal,
-                    {
-                      color: totalEmprestimos >= 0 ? "#00b894" : "#d63031",
-                    },
+                    { color: totalEmprestimos >= 0 ? "#00b894" : "#d63031" },
                   ]}
                 >
                   R$ {Math.abs(totalEmprestimos).toFixed(2).replace(".", ",")}
                 </Text>
               </View>
-
               {listaEmprestimos.map((item) =>
                 renderCategoriaItem(
                   item,
@@ -205,7 +244,6 @@ export default function RelatorioCategorias({ route, navigation }) {
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -215,7 +253,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  // Cabeçalhos de Seção
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -225,7 +262,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   sectionEmprestimo: {
-    marginTop: 30, // Mais espaço antes dos empréstimos
+    marginTop: 30,
+    borderTopWidth: 1,
+    borderTopColor: "#dfe6e9",
+    paddingTop: 20,
+  },
+  sectionInicio: {
+    marginTop: 30,
     borderTopWidth: 1,
     borderTopColor: "#dfe6e9",
     paddingTop: 20,
@@ -241,7 +284,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#2d3436",
   },
-  // Cards
   card: {
     backgroundColor: "#fff",
     padding: 15,
@@ -300,5 +342,11 @@ const styles = StyleSheet.create({
     marginTop: 30,
     marginBottom: 20,
     fontStyle: "italic",
+  },
+  sectionEntrada: {
+    marginTop: 30,
+    borderTopWidth: 1,
+    borderTopColor: "#dfe6e9",
+    paddingTop: 20,
   },
 });

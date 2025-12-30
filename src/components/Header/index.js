@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    paddingTop: 50, // Ajuste para a StatusBar
+    paddingTop: 35, // Ajuste para a StatusBar
     paddingBottom: 15,
     paddingHorizontal: 20,
     backgroundColor: "#fff",

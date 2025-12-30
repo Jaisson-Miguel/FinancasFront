@@ -19,6 +19,8 @@ export default function Extrato({ route, navigation }) {
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saldoListado, setSaldoListado] = useState(0);
+  // NOVO ESTADO: Para controlar a visibilidade do botão de reset
+  const [showResetButton, setShowResetButton] = useState(false);
 
   // Define o título da tela
   const tituloTela =
@@ -38,7 +40,6 @@ export default function Extrato({ route, navigation }) {
       // Vou seguir a lógica mais recente de "se for Principal, /extrato, senão /extrato:{caixaId}" para extratos específicos.
       // Se a intenção for sempre mostrar TUDO, independentemente do caixaId, a lógica da URL precisaria ser ajustada para sempre ir para /extrato.
       // Por enquanto, mantenho a distinção para extratos específicos de caixa.
-
       if (caixaNome === "Principal") {
         // Se for o caixa Principal, busca TUDO (ou só do Principal, dependendo da regra do backend)
         // MEMÓRIA: O usuário deseja que a tela do caixa Principal exiba apenas movimentações da própria caixa, sem incluir de outras caixas.
@@ -51,10 +52,8 @@ export default function Extrato({ route, navigation }) {
         // Caso não tenha caixaId nem seja Principal, busca o extrato geral (todos)
         url = `${API_URL}/extrato`;
       }
-
       const response = await fetch(url);
       const data = await response.json();
-
       if (Array.isArray(data)) {
         setMovimentacoes(data);
         // Calcula a soma simples dos itens retornados
@@ -74,6 +73,15 @@ export default function Extrato({ route, navigation }) {
       setLoading(false);
     }
   }, [caixaId, caixaNome]); // Dependências para useCallback
+
+  // useFocusEffect para recarregar dados quando a tela estiver em foco
+  useFocusEffect(
+    useCallback(() => {
+      carregarMovimentacoes();
+      // Limpa o estado do botão de reset ao sair da tela ou focar novamente
+      setShowResetButton(false);
+    }, [carregarMovimentacoes])
+  );
 
   // --- FUNÇÃO PARA EXCLUIR MOVIMENTAÇÃO ---
   const handleExcluirMovimentacao = async (idMovimentacao) => {
@@ -96,7 +104,6 @@ export default function Extrato({ route, navigation }) {
                   method: "DELETE",
                 }
               );
-
               if (response.ok) {
                 Alert.alert("Sucesso", "Movimentação excluída com sucesso!");
                 carregarMovimentacoes(); // Recarrega a lista após a exclusão
@@ -126,33 +133,93 @@ export default function Extrato({ route, navigation }) {
     navigation.navigate("NovaMovimentacao", { movimentacao: movimentacaoItem });
   };
 
-  // Recarrega as movimentações sempre que a tela estiver em foco
-  useFocusEffect(
-    useCallback(() => {
-      carregarMovimentacoes();
-    }, [carregarMovimentacoes])
-  );
+  // --- NOVA FUNÇÃO PARA RESETAR CAIXA SECUNDÁRIO ---
+  const handleResetCaixa = async () => {
+    if (!caixaId || caixaNome === "Principal") {
+      Alert.alert(
+        "Erro",
+        "Esta função de reset não está disponível para o caixa Principal ou sem ID."
+      );
+      return;
+    }
 
-  // --- RENDERIZAÇÃO DO ITEM DA LISTA ---
+    Alert.alert(
+      "Confirmar Reset do Caixa",
+      `Tem certeza que deseja resetar o caixa "${caixaNome}"? Isso irá zerar o saldo atual e criar uma movimentação de "Saldo Anterior". Esta ação não pode ser desfeita.`,
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Resetar",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await fetch(
+                `${API_URL}/caixas/${caixaId}/reset`, // Rota do backend para resetar um caixa específico
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+
+              const data = await response.json();
+
+              if (response.ok) {
+                Alert.alert("Sucesso", data.message);
+                carregarMovimentacoes(); // Recarrega as movimentações e o saldo após o reset
+                setShowResetButton(false); // Esconde o botão de reset após a operação
+              } else {
+                Alert.alert(
+                  "Erro",
+                  data.message || "Não foi possível resetar o caixa."
+                );
+              }
+            } catch (error) {
+              console.error("Erro ao resetar caixa:", error);
+              Alert.alert("Erro", "Não foi possível resetar o caixa.");
+            } finally {
+              setLoading(false);
+            }
+          },
+          style: "destructive",
+        },
+      ]
+    );
+  };
+
+  // --- FUNÇÃO PARA ALTERNAR A VISIBILIDADE DO BOTÃO DE RESET ---
+  const toggleResetButtonVisibility = () => {
+    // Só permite alternar se for um caixa secundário
+    if (caixaId && caixaNome !== "Principal") {
+      setShowResetButton((prev) => !prev);
+    } else {
+      Alert.alert(
+        "Informação",
+        "A função de reset está disponível apenas para caixas secundários."
+      );
+    }
+  };
+
   const renderItem = ({ item }) => (
     <View style={styles.cardMovimentacao}>
       <View style={styles.infoContainer}>
-        {item.caixa && item.caixa.nome && (
-          <View style={styles.tagCaixa}>
-            <Text style={styles.tagCaixaText}>{item.caixa.nome}</Text>
-          </View>
-        )}
+        <Text style={styles.categoriaTexto}>{item.categoria}</Text>
         <Text style={styles.descricao}>{item.descricao}</Text>
-        {item.categoria && (
-          <Text style={styles.categoriaTexto}>{item.categoria}</Text>
-        )}
         <View style={styles.metaDataContainer}>
           <Text style={styles.data}>
-            {new Date(item.createdAt).toLocaleDateString("pt-BR")}
+            {new Date(item.data).toLocaleDateString("pt-BR")}
           </Text>
+          {item.caixa && (
+            <View style={styles.tagCaixa}>
+              <Text style={styles.tagCaixaText}>{item.caixa.nome}</Text>
+            </View>
+          )}
         </View>
       </View>
-
       <View style={styles.rightContainer}>
         <Text
           style={[
@@ -163,14 +230,13 @@ export default function Extrato({ route, navigation }) {
           R$ {item.valor.toFixed(2).replace(".", ",")}
         </Text>
         <View style={styles.botoesContainer}>
-          {/* Botão de Editar (Lápis) */}
+          {/* Botão de Editar */}
           <TouchableOpacity
             style={styles.btnEditar}
             onPress={() => handleEditMovimentacao(item)}
           >
             <FontAwesome name="pencil" size={18} color="#fff" />
           </TouchableOpacity>
-
           {/* Botão de Excluir */}
           <TouchableOpacity
             style={styles.btnExcluir}
@@ -186,7 +252,6 @@ export default function Extrato({ route, navigation }) {
   return (
     <View style={styles.container}>
       <Header title={tituloTela} showBack={true} navigation={navigation} />
-
       {loading ? (
         <ActivityIndicator
           size="large"
@@ -196,7 +261,22 @@ export default function Extrato({ route, navigation }) {
       ) : (
         <>
           <View style={styles.saldoContainer}>
-            <Text style={styles.saldoLabel}>Saldo em Extrato</Text>
+            <View style={styles.saldoHeader}>
+              <Text style={styles.saldoLabel}>Saldo em Extrato</Text>
+              {/* Ícone de engrenagem para caixas secundários */}
+              {caixaId && caixaNome !== "Principal" && (
+                <TouchableOpacity
+                  onPress={toggleResetButtonVisibility}
+                  style={styles.gearIconContainer}
+                >
+                  <FontAwesome
+                    name="cog"
+                    size={20}
+                    color={showResetButton ? "#0984e3" : "#b2bec3"} // Muda a cor se o botão estiver visível
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
             <Text
               style={[
                 styles.saldoValor,
@@ -206,6 +286,17 @@ export default function Extrato({ route, navigation }) {
               R$ {saldoListado.toFixed(2).replace(".", ",")}
             </Text>
           </View>
+
+          {/* Botão de Resetar Caixa - Visível apenas para caixas secundários e quando showResetButton é true */}
+          {caixaId && caixaNome !== "Principal" && showResetButton && (
+            <TouchableOpacity
+              style={styles.resetButton}
+              onPress={handleResetCaixa}
+            >
+              <FontAwesome name="undo" size={20} color="#fff" />
+              <Text style={styles.resetButtonText}>Resetar Caixa</Text>
+            </TouchableOpacity>
+          )}
 
           <FlatList
             data={movimentacoes}
@@ -220,7 +311,6 @@ export default function Extrato({ route, navigation }) {
           />
         </>
       )}
-
       {/* FAB para adicionar nova movimentação (se não for extrato geral) */}
       {caixaId && caixaNome !== "Principal" && (
         <TouchableOpacity
@@ -252,6 +342,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 3,
   },
+  saldoHeader: {
+    // NOVO ESTILO: Para alinhar o label e a engrenagem
+    flexDirection: "row",
+    justifyContent: "center", // Centraliza o texto "Saldo em Extrato"
+    alignItems: "center",
+    width: "100%", // Ocupa a largura total para posicionar a engrenagem
+    position: "relative", // Permite posicionar a engrenagem de forma absoluta
+  },
   saldoLabel: {
     color: "#b2bec3",
     fontSize: 14,
@@ -261,6 +359,12 @@ const styles = StyleSheet.create({
   saldoValor: {
     fontSize: 28,
     fontWeight: "bold",
+  },
+  gearIconContainer: {
+    // NOVO ESTILO: Para a engrenagem
+    position: "absolute",
+    right: 0, // Alinha à direita dentro do saldoHeader
+    padding: 5, // Área de toque maior
   },
   listContent: {
     padding: 10,
@@ -370,5 +474,29 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  // --- Novos estilos para o botão de Reset ---
+  resetButton: {
+    backgroundColor: "#ff7675", // Um vermelho mais suave para o reset
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginHorizontal: 10,
+    marginTop: 10,
+    marginBottom: 10, // Adicionado para separar do saldo e da lista
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  resetButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginLeft: 10,
   },
 });
