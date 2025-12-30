@@ -22,11 +22,6 @@ export default function RelatorioPdf({ navigation }) {
       const fileName = `relatorio_financeiro_${Date.now()}.pdf`;
       const fileUri = FileSystem.cacheDirectory + fileName;
 
-      console.log(
-        "Frontend: Iniciando requisição para:",
-        `${API_URL}/relatorio-pdf`
-      );
-
       const response = await fetch(`${API_URL}/relatorio-pdf`, {
         method: "GET",
         headers: {
@@ -51,18 +46,14 @@ export default function RelatorioPdf({ navigation }) {
           encoding: "base64",
         });
 
-        console.log("Frontend: PDF salvo com sucesso em:", fileUri);
-
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
             mimeType: "application/pdf",
             UTI: "com.adobe.pdf",
             dialogTitle: "Compartilhar Relatório Financeiro",
           });
-          console.log("Frontend: Compartilhamento iniciado.");
         } else {
           Alert.alert("Sucesso", `Relatório salvo em: ${fileUri}`);
-          console.warn("Frontend: Compartilhamento não disponível.");
         }
       };
 
@@ -75,7 +66,6 @@ export default function RelatorioPdf({ navigation }) {
       );
     } finally {
       setLoading(false);
-      console.log("Frontend: Requisição finalizada.");
     }
   };
 
