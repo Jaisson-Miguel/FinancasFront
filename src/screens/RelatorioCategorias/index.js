@@ -10,194 +10,222 @@ import {
 import { FontAwesome } from "@expo/vector-icons";
 import Header from "./../../components/Header";
 import API_URL from "./../../config";
+
 export default function RelatorioCategorias({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
   const [listaGastos, setListaGastos] = useState([]);
   const [listaEmprestimos, setListaEmprestimos] = useState([]);
   const [listaInicio, setListaInicio] = useState([]);
   const [listaEntradas, setListaEntradas] = useState([]);
+
   const [totalGastos, setTotalGastos] = useState(0);
   const [totalEmprestimos, setTotalEmprestimos] = useState(0);
   const [totalInicio, setTotalInicio] = useState(0);
   const [totalEntradas, setTotalEntradas] = useState(0);
+
+  const [metasPorcentagemFixa, setMetasPorcentagemFixa] = useState({});
+
   useEffect(() => {
     carregarDados();
   }, []);
+
   const carregarDados = async () => {
     try {
       if (!refreshing) setLoading(true);
       const response = await fetch(
         `${API_URL}/extrato/categorias?t=${Date.now()}`
       );
-      const { categorias, totalEntrada } = await response.json();
+      const data = await response.json();
 
-      if (Array.isArray(categorias)) {
-        const apenasEmprestimos = categorias.filter(
-          (item) => item._id === "Empréstimos"
-        );
-        const apenasInicio = categorias.filter((item) => item._id === "Inicio");
-        const apenasEntradas = categorias.filter(
-          (item) => item._id === "entrada"
-        );
-        const apenasGastos = categorias.filter(
-          (item) =>
-            item._id !== "Empréstimos" &&
-            item._id !== "Inicio" &&
-            item._id !== "entrada"
-        );
+      setListaGastos(data.gastos || []);
+      setTotalGastos(data.totalGastos || 0);
 
-        // GASTOS
-        const totalG = apenasGastos.reduce(
-          (acc, item) => acc + Math.abs(item.total),
-          0
-        );
-        setTotalGastos(totalG);
-        setListaGastos(
-          apenasGastos.map((item) => ({
-            nome: item._id || "Outros",
-            valor: item.total,
-            valorAbsoluto: Math.abs(item.total),
-          }))
-        );
+      setListaEmprestimos(data.emprestimos || []);
+      setTotalEmprestimos(data.totalEmprestimos || 0);
 
-        // EMPRÉSTIMOS
-        const totalE = apenasEmprestimos.reduce(
-          (acc, item) => acc + item.total,
-          0
-        );
-        setTotalEmprestimos(totalE);
-        setListaEmprestimos(
-          apenasEmprestimos.map((item) => ({
-            nome: item._id,
-            valor: item.total,
-            valorAbsoluto: Math.abs(item.total),
-          }))
-        );
+      setListaInicio(data.inicio || []);
+      setTotalInicio(data.totalInicio || 0);
 
-        // INÍCIO
-        const totalI = apenasInicio.reduce((acc, item) => acc + item.total, 0);
-        setTotalInicio(totalI);
-        setListaInicio(
-          apenasInicio.map((item) => ({
-            nome: item._id,
-            valor: item.total,
-            valorAbsoluto: Math.abs(item.total),
-          }))
-        );
+      setListaEntradas(data.entradas || []);
+      setTotalEntradas(data.totalEntrada || 0);
 
-        // ENTRADAS
-        setListaEntradas([
-          {
-            nome: "Entradas Diretas",
-            valor: totalEntrada,
-            valorAbsoluto: Math.abs(totalEntrada),
-          },
-        ]);
-        setTotalEntradas(totalEntrada || 0);
-      } else {
-        setListaGastos([]);
-        setListaEmprestimos([]);
-        setListaInicio([]);
-        setListaEntradas([]);
-      }
+      setMetasPorcentagemFixa(data.metasPorcentagemFixa || {});
     } catch (error) {
       console.error("Erro ao carregar relatório:", error);
+      setListaGastos([]);
+      setTotalGastos(0);
+      setListaEmprestimos([]);
+      setTotalEmprestimos(0);
+      setListaInicio([]);
+      setTotalInicio(0);
+      setListaEntradas([]);
+      setTotalEntradas(0);
+      setMetasPorcentagemFixa({});
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     carregarDados();
   }, []);
-  const renderCategoriaItem = (item, totalReferencia, corBarra) => {
-    const porcentagem =
-      totalReferencia === 0
-        ? 0
-        : (item.valorAbsoluto / Math.abs(totalReferencia)) * 100;
-    const corValor = item.valor >= 0 ? "#00b894" : "#d63031";
-    return (
-      <View key={item.nome} style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.rowNome}>
-            <View style={styles.iconBg}>
-              <FontAwesome name="tag" size={16} color="#636e72" />
+
+  const renderCategoriaItem = (item, corBarraPadrao) => {
+    // Renomeado para corBarraPadrao
+    const metaPorcentagem = metasPorcentagemFixa[item.nome];
+
+    // --- ALTERAÇÃO 1: Remover o sinal negativo dos valores ---
+    const valorFormatado = Math.abs(item.valor).toFixed(2).replace(".", ",");
+    const corValor = item.valor >= 0 ? "#00b894" : "#d63031"; // Mantém a cor vermelha para negativos
+    // --------------------------------------------------------
+
+    if (metaPorcentagem === undefined) {
+      const porcentagem =
+        totalEntradas === 0
+          ? 0
+          : (item.valorAbsoluto / Math.abs(totalEntradas)) * 100;
+
+      // --- ALTERAÇÃO 2: Barra de progresso sempre verde se não houver meta ---
+      const corBarraFinal = corBarraPadrao; // Usa a cor padrão passada (geralmente verde ou azul)
+      // -----------------------------------------------------------------------
+
+      return (
+        <View key={item.nome} style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.rowNome}>
+              <View style={styles.iconBg}>
+                <FontAwesome name="tag" size={18} color="#636e72" />
+              </View>
+              <Text style={styles.catNome}>{item.nome}</Text>
             </View>
-            <Text style={styles.catNome}>{item.nome}</Text>
+            <Text style={[styles.catValor, { color: corValor }]}>
+              R$ {valorFormatado}
+            </Text>
           </View>
-          <Text style={[styles.catValor, { color: corValor }]}>
-            R$ {Math.abs(item.valor).toFixed(2).replace(".", ",")}
+          <View style={styles.progressContainer}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.min(porcentagem, 100)}%`,
+                  backgroundColor: corBarraFinal,
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.porcentagemText}>
+            {porcentagem.toFixed(2).replace(".", ",")}% do total de entradas
           </Text>
         </View>
-        <View style={styles.progressContainer}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${porcentagem}%`, backgroundColor: corBarra },
-            ]}
-          />
+      );
+    } else {
+      const valorAlvo = (Math.abs(totalEntradas) * metaPorcentagem) / 100;
+      const diferenca = valorAlvo - item.valorAbsoluto;
+
+      let textoDiferenca;
+      let corDiferenca;
+      let porcentagemBarra;
+      let corBarraFinal = corBarraPadrao; // Inicia com a cor padrão (verde)
+
+      if (diferenca > 0) {
+        textoDiferenca = `Faltam R$ ${diferenca
+          .toFixed(2)
+          .replace(".", ",")} (${metaPorcentagem
+          .toFixed(2)
+          .replace(".", ",")}%)`;
+        corDiferenca = "#00b894"; // Verde
+        porcentagemBarra = (item.valorAbsoluto / valorAlvo) * 100;
+      } else {
+        textoDiferenca = `Excedeu R$ ${Math.abs(diferenca)
+          .toFixed(2)
+          .replace(".", ",")} (${metaPorcentagem
+          .toFixed(2)
+          .replace(".", ",")}%)`;
+        corDiferenca = "#d63031"; // Vermelho
+        porcentagemBarra = 100; // Barra cheia, mas o texto indica que excedeu
+        corBarraFinal = "#d63031"; // --- ALTERAÇÃO 2: Barra vermelha se exceder a meta ---
+      }
+
+      return (
+        <View key={item.nome} style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.rowNome}>
+              <View style={styles.iconBg}>
+                <FontAwesome name="tag" size={18} color="#636e72" />
+              </View>
+              <Text style={styles.catNome}>{item.nome}</Text>
+            </View>
+            <Text style={[styles.catValor, { color: corValor }]}>
+              R$ {valorFormatado}
+            </Text>
+          </View>
+          <View style={styles.progressContainer}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.min(porcentagemBarra, 100)}%`,
+                  backgroundColor: corBarraFinal,
+                },
+              ]}
+            />
+          </View>
+          <Text style={[styles.porcentagemText, { color: corDiferenca }]}>
+            {textoDiferenca}
+          </Text>
         </View>
-        <Text style={styles.porcentagemText}>
-          {porcentagem.toFixed(1)}% do total
-        </Text>
-      </View>
-    );
+      );
+    }
   };
+
   return (
     <View style={styles.container}>
-      <Header
-        title="Relatório Financeiro"
-        showBack={true}
-        navigation={navigation}
-      />
+      <Header title="Relatório por Categorias" navigation={navigation} />
       {loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#0984e3"
-          style={{ marginTop: 40 }}
-        />
+        <ActivityIndicator size="large" color="#007bff" style={{ flex: 1 }} />
       ) : (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          style={styles.scrollContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          {/* ENTRADAS DIRETAS */}
-          {totalEntradas > 0 && (
+          {/* ENTRADAS */}
+          {listaEntradas.length > 0 && (
             <>
-              <View style={[styles.sectionHeader, styles.sectionEntrada]}>
+              <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: "#00b894" }]}>
-                  Entradas Diretas
+                  Entradas
                 </Text>
                 <Text style={[styles.sectionTotal, { color: "#00b894" }]}>
                   R$ {Math.abs(totalEntradas).toFixed(2).replace(".", ",")}
                 </Text>
               </View>
               {listaEntradas.map((item) =>
-                renderCategoriaItem(item, totalEntradas, "#00b894")
+                renderCategoriaItem(item, "#00b894")
               )}
             </>
           )}
 
-          {/* GASTOS */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Gastos Operacionais</Text>
-            <Text style={styles.sectionTotal}>
-              R$ {totalGastos.toFixed(2).replace(".", ",")}
-            </Text>
-          </View>
-          {listaGastos.length === 0 &&
-          listaEmprestimos.length === 0 &&
-          listaInicio.length === 0 ? (
-            <Text style={styles.emptyText}>Nenhum dado encontrado.</Text>
-          ) : (
-            listaGastos.map((item) =>
-              renderCategoriaItem(item, totalGastos, "#2d3436")
-            )
+          {/* GASTOS OPERACIONAIS */}
+          {listaGastos.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Gastos Operacionais</Text>
+                <Text style={[styles.sectionTotal, { color: "#d63031" }]}>
+                  R$ {Math.abs(totalGastos).toFixed(2).replace(".", ",")}
+                </Text>
+              </View>
+              {listaGastos.map(
+                (item) => renderCategoriaItem(item, "#00b894") // Barra verde por padrão
+              )}
+            </>
           )}
+
           {/* INÍCIO */}
           {listaInicio.length > 0 && (
             <>
@@ -209,11 +237,10 @@ export default function RelatorioCategorias({ route, navigation }) {
                   R$ {Math.abs(totalInicio).toFixed(2).replace(".", ",")}
                 </Text>
               </View>
-              {listaInicio.map((item) =>
-                renderCategoriaItem(item, totalInicio, "#6c5ce7")
-              )}
+              {listaInicio.map((item) => renderCategoriaItem(item, "#6c5ce7"))}
             </>
           )}
+
           {/* EMPRÉSTIMOS */}
           {listaEmprestimos.length > 0 && (
             <>
@@ -233,17 +260,25 @@ export default function RelatorioCategorias({ route, navigation }) {
               {listaEmprestimos.map((item) =>
                 renderCategoriaItem(
                   item,
-                  totalEmprestimos,
-                  item.valor >= 0 ? "#00b894" : "#d63031"
+                  item.valor >= 0 ? "#00b894" : "#d63031" // Mantém a lógica de cor da barra para empréstimos
                 )
               )}
             </>
           )}
+
+          {/* Mensagem de "Nenhum dado encontrado" se todas as listas estiverem vazias */}
+          {listaGastos.length === 0 &&
+            listaEmprestimos.length === 0 &&
+            listaInicio.length === 0 &&
+            listaEntradas.length === 0 && (
+              <Text style={styles.emptyText}>Nenhum dado encontrado.</Text>
+            )}
         </ScrollView>
       )}
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,

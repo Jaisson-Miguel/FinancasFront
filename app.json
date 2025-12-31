@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cofrinho",
     "slug": "CofrinhoFront",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,7 +15,7 @@
     "android": {
       "package": "com.jaissonmiguel.cofrinhofront",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/Capa.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true
