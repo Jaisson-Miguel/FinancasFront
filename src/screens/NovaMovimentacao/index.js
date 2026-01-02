@@ -17,7 +17,7 @@ const CATEGORIAS_DISPONIVEIS = [
   "Outros",
   "Fixo",
   "Luxo",
-  "Transporte",
+  "Dízimo",
   "Lazer",
   "Educação",
   "Investimento",

@@ -26,6 +26,7 @@ export default function RelatorioCategorias({ route, navigation }) {
   const [totalEntradas, setTotalEntradas] = useState(0);
 
   const [metasPorcentagemFixa, setMetasPorcentagemFixa] = useState({});
+  const [metasAjusteValor, setMetasAjusteValor] = useState({});
 
   useEffect(() => {
     carregarDados();
@@ -52,6 +53,7 @@ export default function RelatorioCategorias({ route, navigation }) {
       setTotalEntradas(data.totalEntrada || 0);
 
       setMetasPorcentagemFixa(data.metasPorcentagemFixa || {});
+      setMetasAjusteValor(data.metasAjusteValor || {});
     } catch (error) {
       console.error("Erro ao carregar relatório:", error);
       setListaGastos([]);
@@ -63,6 +65,7 @@ export default function RelatorioCategorias({ route, navigation }) {
       setListaEntradas([]);
       setTotalEntradas(0);
       setMetasPorcentagemFixa({});
+      setMetasAjusteValor({});
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -77,6 +80,7 @@ export default function RelatorioCategorias({ route, navigation }) {
   const renderCategoriaItem = (item, corBarraPadrao) => {
     // Renomeado para corBarraPadrao
     const metaPorcentagem = metasPorcentagemFixa[item.nome];
+    const metaAjuste = metasAjusteValor[item.nome];
 
     // --- ALTERAÇÃO 1: Remover o sinal negativo dos valores ---
     const valorFormatado = Math.abs(item.valor).toFixed(2).replace(".", ",");
@@ -123,7 +127,8 @@ export default function RelatorioCategorias({ route, navigation }) {
         </View>
       );
     } else {
-      const valorAlvo = (Math.abs(totalEntradas) * metaPorcentagem) / 100;
+      const valorBruto = (Math.abs(totalEntradas) * metaPorcentagem) / 100;
+      const valorAlvo = valorBruto + metaAjuste;
       const diferenca = valorAlvo - item.valorAbsoluto;
 
       let textoDiferenca;
