@@ -218,17 +218,6 @@ export default function NovaMovimentacao({ route, navigation }) {
           ))}
         </View>
 
-        {/* OBSERVAÇÃO */}
-        <Text style={styles.label}>Observação (Opcional)</Text>
-        <TextInput
-          style={[styles.input, { height: 100, textAlignVertical: "top" }]}
-          placeholder="Detalhes adicionais..."
-          multiline={true}
-          numberOfLines={4}
-          value={observacao}
-          onChangeText={setObservacao}
-        />
-
         <TouchableOpacity
           style={[styles.btnSalvar, loading && { opacity: 0.7 }]}
           onPress={handleSalvar}

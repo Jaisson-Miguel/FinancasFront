@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,16 +7,29 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
 import { FontAwesome } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import Header from "./../../components/Header";
 import API_URL from "./../../config";
 
+// Habilita LayoutAnimation para Android
+if (Platform.OS === "android") {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+}
+
 export default function ContasAPagar({ navigation }) {
   const [contas, setContas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [abaAtiva, setAbaAtiva] = useState("contas"); // 'contas' ou 'instituicoes'
+  const [expandedInstitutions, setExpandedInstitutions] = useState({});
+  const [dadosAgrupados, setDadosAgrupados] = useState({});
+  const [totalGeralContas, setTotalGeralContas] = useState(0);
+  const [totalGeralAPagar, setTotalGeralAPagar] = useState(0);
 
   const carregarContas = async () => {
     try {
@@ -29,11 +42,48 @@ export default function ContasAPagar({ navigation }) {
           (a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento)
         );
         setContas(data);
+
+        const agrupados = {};
+        let somaTotalGeral = 0;
+        let somaTotalAPagar = 0;
+
+        data.forEach((conta) => {
+          const instituicaoNome = conta.instituicao || "Outros";
+          if (!agrupados[instituicaoNome]) {
+            agrupados[instituicaoNome] = {
+              totalInstituicao: 0,
+              totalInstituicaoAPagar: 0,
+              contas: [],
+            };
+          }
+
+          agrupados[instituicaoNome].totalInstituicao += conta.valor;
+          somaTotalGeral += conta.valor;
+
+          if (conta.status !== "pago") {
+            const valorParaPagar = conta.valorRestante ?? conta.valor;
+            agrupados[instituicaoNome].totalInstituicaoAPagar += valorParaPagar;
+            somaTotalAPagar += valorParaPagar;
+          }
+          agrupados[instituicaoNome].contas.push(conta);
+        });
+
+        setDadosAgrupados(agrupados);
+        setTotalGeralContas(somaTotalGeral);
+        setTotalGeralAPagar(somaTotalAPagar);
       } else {
         setContas([]);
+        setDadosAgrupados({});
+        setTotalGeralContas(0);
+        setTotalGeralAPagar(0);
       }
     } catch (error) {
       console.log("Erro ao buscar contas:", error);
+      Alert.alert("Erro", "Não foi possível carregar as contas.");
+      setContas([]);
+      setDadosAgrupados({});
+      setTotalGeralContas(0);
+      setTotalGeralAPagar(0);
     } finally {
       setLoading(false);
     }
@@ -45,279 +95,298 @@ export default function ContasAPagar({ navigation }) {
     }, [])
   );
 
-  // --- NAVEGAÇÃO PARA PAGAMENTO ---
+  const toggleExpand = (instituicaoNome) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedInstitutions((prev) => ({
+      ...prev,
+      [instituicaoNome]: !prev[instituicaoNome],
+    }));
+  };
+
   const irParaPagamento = (item) => {
     if (item.status === "pago") {
       Alert.alert("Aviso", "Esta conta já está totalmente paga.");
       return;
     }
-    // Navega para a nova tela passando o objeto da conta
     navigation.navigate("TelaPagamento", { conta: item });
   };
 
-  // --- AGRUPAMENTO POR INSTITUIÇÃO ---
-  const dadosInstituicoes = useMemo(() => {
-    const grupos = {};
-    contas.forEach((conta) => {
-      const nome = conta.instituicao || "Outros";
-      if (!grupos[nome]) {
-        grupos[nome] = { nome, totalHistorico: 0, totalAPagar: 0 };
-      }
-      grupos[nome].totalHistorico += conta.valor;
+  const irParaEdicao = (conta) => {
+    // Assumindo que "CriarConta" é a tela que você usa para criar/editar contas
+    navigation.navigate("CriarConta", { contaParaEditar: conta });
+  };
 
-      // Soma o que falta (se status não for pago)
-      // Usa valorRestante se existir, senão usa valor total
-      const restante =
-        conta.status === "pago" ? 0 : conta.valorRestante ?? conta.valor;
-      grupos[nome].totalAPagar += restante;
-    });
-    return Object.values(grupos).sort((a, b) => b.totalAPagar - a.totalAPagar);
-  }, [contas]);
+  // Nova função para navegar para a tela GerenciarContas
+  const irParaGerenciarContas = () => {
+    navigation.navigate("GerenciarContas"); // Nome da sua tela de gerenciamento
+  };
 
-  // --- RENDERIZAÇÃO ---
-  const renderConta = ({ item }) => {
-    let corStatus = "#2d3436";
-    let textoStatus = "PENDENTE";
+  const renderContaItem = ({ item }) => {
     const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    hoje.setHours(0, 0, 0, 0); // Zera a hora para comparação
+
     const vencimento = new Date(item.dataVencimento);
     vencimento.setHours(0, 0, 0, 0);
 
+    let corStatus = "#f39c12"; // Laranja padrão para "a pagar"
+    let textoStatus = "A PAGAR";
+    let valorExibido = item.valorRestante ?? item.valor; // Valor a pagar ou total
+
     if (item.status === "pago") {
-      corStatus = "#27ae60";
+      corStatus = "#27ae60"; // Verde
       textoStatus = "PAGO";
-    } else if (item.status === "parcial") {
-      corStatus = "#f39c12";
-      textoStatus = "PARCIAL";
+      valorExibido = item.valor; // Se pago, exibe o valor total da conta
     } else if (vencimento < hoje) {
-      corStatus = "#c0392b";
-      textoStatus = "VENCIDA";
+      corStatus = "#e74c3c"; // Vermelho
+      textoStatus = "ATRASADA";
     }
 
-    const valorExibir =
-      item.status === "pago" ? item.valor : item.valorRestante ?? item.valor;
+    const dia = String(vencimento.getUTCDate()).padStart(2, "0");
+    const mes = String(vencimento.getUTCMonth() + 1).padStart(2, "0");
 
     return (
       <TouchableOpacity
         style={[styles.card, { borderLeftColor: corStatus }]}
         onPress={() => irParaPagamento(item)}
       >
-        <View style={styles.cardDate}>
-          <Text style={[styles.dayText, { color: corStatus }]}>
-            {new Date(item.dataVencimento).getUTCDate()}
-          </Text>
-          <Text style={styles.monthText}>
-            {new Date(item.dataVencimento)
-              .toLocaleString("pt-BR", { month: "short", timeZone: "UTC" })
-              .toUpperCase()
-              .replace(".", "")}
-          </Text>
+        <View style={styles.cardLeft}>
+          <Text style={styles.dayText}>{dia}</Text>
+          <Text style={styles.monthText}>{mes}</Text>
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{item.descricao}</Text>
-          <Text style={styles.instTextSmall}>{item.instituicao}</Text>
           <Text style={[styles.cardStatus, { color: corStatus }]}>
             {textoStatus}
           </Text>
         </View>
         <View style={styles.cardRight}>
           <Text style={styles.labelValor}>
-            {item.status === "pago" ? "Valor Total" : "Falta Pagar"}
+            {item.status === "pago" ? "Valor Total" : "Valor Restante"}
           </Text>
           <Text style={[styles.valueText, { color: corStatus }]}>
-            R$ {valorExibir.toFixed(2).replace(".", ",")}
+            R$ {valorExibido.toFixed(2).replace(".", ",")}
           </Text>
         </View>
       </TouchableOpacity>
     );
   };
 
-  const renderInstituicao = ({ item }) => (
-    <View style={styles.cardInstituicao}>
-      <View style={styles.instHeader}>
-        <Text style={styles.instName}>{item.nome}</Text>
-        <FontAwesome name="building-o" size={20} color="#2d3436" />
+  const renderInstituicaoGroup = ({ item: instituicaoNome }) => {
+    const instituicaoData = dadosAgrupados[instituicaoNome];
+    const isExpanded = expandedInstitutions[instituicaoNome];
+
+    if (!instituicaoData) return null;
+
+    return (
+      <View style={styles.instituicaoGroupContainer}>
+        <TouchableOpacity
+          style={styles.instHeader}
+          onPress={() => toggleExpand(instituicaoNome)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.instName}>{instituicaoNome}</Text>
+          </View>
+          <View style={styles.instValuesContainer}>
+            <View style={styles.instValueBlock}>
+              <Text style={styles.instLabel}>Total</Text>
+              <Text style={styles.instValueGray}>
+                R${" "}
+                {instituicaoData.totalInstituicao.toFixed(2).replace(".", ",")}
+              </Text>
+            </View>
+            <View style={styles.verticalDivider} />
+            <View style={styles.instValueBlock}>
+              <Text style={styles.instLabelDestaque}>A Pagar</Text>
+              <Text style={styles.instValueDestaque}>
+                R${" "}
+                {instituicaoData.totalInstituicaoAPagar
+                  .toFixed(2)
+                  .replace(".", ",")}
+              </Text>
+            </View>
+            <FontAwesome
+              name={isExpanded ? "chevron-up" : "chevron-down"}
+              size={16}
+              color="#636e72"
+              style={{ marginLeft: 15 }}
+            />
+          </View>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <FlatList
+            data={instituicaoData.contas}
+            keyExtractor={(item) => item._id}
+            renderItem={renderContaItem}
+            scrollEnabled={false} // Importante para que o ScrollView pai gerencie o scroll
+            contentContainerStyle={styles.contasListInsideGroup}
+          />
+        )}
       </View>
-      <View style={styles.instValuesContainer}>
-        <View style={styles.instValueBlock}>
-          <Text style={styles.instLabelDestaque}>A PAGAR (RESTANTE)</Text>
-          <Text style={styles.instValueDestaque}>
-            R$ {item.totalAPagar.toFixed(2).replace(".", ",")}
-          </Text>
-        </View>
-        <View style={styles.verticalDivider} />
-        <View style={styles.instValueBlock}>
-          <Text style={styles.instLabel}>TOTAL HISTÓRICO</Text>
-          <Text style={styles.instValueGray}>
-            R$ {item.totalHistorico.toFixed(2).replace(".", ",")}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
       <Header title="Contas a Pagar" />
 
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tabBtn, abaAtiva === "contas" && styles.tabBtnActive]}
-          onPress={() => setAbaAtiva("contas")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              abaAtiva === "contas" && styles.tabTextActive,
-            ]}
-          >
-            MINHAS CONTAS
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.tabBtn,
-            abaAtiva === "instituicoes" && styles.tabBtnActive,
-          ]}
-          onPress={() => setAbaAtiva("instituicoes")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              abaAtiva === "instituicoes" && styles.tabTextActive,
-            ]}
-          >
-            POR INSTITUIÇÃO
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.gearBtn}
-          onPress={() => navigation.navigate("GerenciarContas")}
-        >
-          <FontAwesome name="cog" size={20} color="#636e72" />
-        </TouchableOpacity>
-      </View>
-
       {loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#2d3436"
-          style={{ marginTop: 50 }}
-        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0984e3" />
+          <Text style={styles.loadingText}>Carregando contas...</Text>
+        </View>
       ) : (
-        <FlatList
-          data={abaAtiva === "contas" ? contas : dadosInstituicoes}
-          keyExtractor={(item, index) =>
-            abaAtiva === "contas"
-              ? item._id || index.toString()
-              : item.nome || index.toString()
-          }
-          renderItem={abaAtiva === "contas" ? renderConta : renderInstituicao}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Nenhum registro encontrado.</Text>
+        <>
+          <View style={styles.totalGeralContainer}>
+            <View style={styles.totalGeralBlock}>
+              <Text style={styles.totalGeralLabel}>Total Geral</Text>
+              <Text style={styles.totalGeralValue}>
+                R$ {totalGeralContas.toFixed(2).replace(".", ",")}
+              </Text>
             </View>
-          }
-        />
+            <View style={styles.verticalDivider} />
+            <View style={styles.totalGeralBlock}>
+              <Text style={styles.totalGeralLabelDestaque}>Total a Pagar</Text>
+              <Text style={styles.totalGeralValueDestaque}>
+                R$ {totalGeralAPagar.toFixed(2).replace(".", ",")}
+              </Text>
+            </View>
+            {/* NOVO BOTÃO DE ENGRENAGEM AQUI */}
+            <TouchableOpacity
+              style={styles.settingsButton} // Novo estilo para o botão
+              onPress={irParaGerenciarContas}
+            >
+              <FontAwesome name="cog" size={24} color="#636e72" />
+            </TouchableOpacity>
+          </View>
+
+          {Object.keys(dadosAgrupados).length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <FontAwesome name="check-circle-o" size={60} color="#b2bec3" />
+              <Text style={styles.emptyText}>Nenhuma conta encontrada.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={Object.keys(dadosAgrupados).sort()}
+              keyExtractor={(item) => item}
+              renderItem={renderInstituicaoGroup}
+              contentContainerStyle={styles.scrollContent}
+            />
+          )}
+        </>
       )}
 
-      {abaAtiva === "contas" && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => navigation.navigate("CriarConta")}
-        >
-          <FontAwesome name="plus" size={24} color="#fff" />
-        </TouchableOpacity>
-      )}
+      {/* Botão FAB para adicionar nova conta */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate("CriarConta")}
+      >
+        <FontAwesome name="plus" size={24} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f6fa" },
-  tabsContainer: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    padding: 10,
-    marginHorizontal: 15,
-    marginTop: 15,
-    marginBottom: 5,
-    borderRadius: 10,
-    elevation: 2,
-    alignItems: "center",
-    gap: 10,
-  },
-  tabBtn: {
+  container: {
     flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 8,
     backgroundColor: "#f1f2f6",
   },
-  tabBtnActive: { backgroundColor: "#2d3436" },
-  tabText: { fontWeight: "bold", color: "#b2bec3", fontSize: 12 },
-  tabTextActive: { color: "#fff" },
-  gearBtn: { padding: 10 },
-  listContent: { paddingHorizontal: 15, paddingBottom: 80, paddingTop: 10 },
-  // Card Conta
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 15,
-    elevation: 2,
-    borderLeftWidth: 5,
-  },
-  cardDate: {
-    alignItems: "center",
+  loadingContainer: {
+    flex: 1,
     justifyContent: "center",
-    marginRight: 15,
-    width: 40,
+    alignItems: "center",
   },
-  dayText: { fontSize: 18, fontWeight: "bold" },
-  monthText: { fontSize: 10, color: "#636e72", fontWeight: "bold" },
-  cardInfo: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: "600", color: "#2d3436" },
-  instTextSmall: {
-    fontSize: 10,
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
     color: "#636e72",
-    fontWeight: "bold",
-    textTransform: "uppercase",
-    marginBottom: 2,
   },
-  cardStatus: { fontSize: 10, fontWeight: "bold" },
-  cardRight: { alignItems: "flex-end", justifyContent: "center" },
-  labelValor: { fontSize: 10, color: "#b2bec3" },
-  valueText: { fontSize: 16, fontWeight: "bold" },
-  // Card Instituição
-  cardInstituicao: {
+  scrollContent: {
+    padding: 15,
+    paddingBottom: 80, // Espaço para o FAB
+  },
+  totalGeralContainer: {
+    flexDirection: "row",
     backgroundColor: "#fff",
     borderRadius: 12,
-    marginBottom: 12,
-    padding: 15,
+    marginHorizontal: 15,
+    marginTop: 10,
+    marginBottom: 20,
+    paddingVertical: 15,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3.84,
+    alignItems: "center", // Centraliza itens verticalmente
+    justifyContent: "space-between", // Distribui espaço entre os itens
+    paddingHorizontal: 20, // Adiciona padding horizontal
+  },
+  totalGeralBlock: {
+    alignItems: "center",
+  },
+  totalGeralLabel: {
+    fontSize: 12,
+    color: "#b2bec3",
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  totalGeralValue: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2d3436",
+  },
+  totalGeralLabelDestaque: {
+    fontSize: 12,
+    color: "#c0392b", // Vermelho para destaque
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  totalGeralValueDestaque: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#c0392b", // Vermelho para destaque
+  },
+  // NOVO ESTILO PARA O BOTÃO DE ENGRENAGEM
+  settingsButton: {
+    padding: 8, // Área de toque maior
+    borderRadius: 20, // Borda arredondada
+    // backgroundColor: '#f1f2f6', // Opcional: um fundo leve para o botão
+  },
+  instituicaoGroupContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 15,
     elevation: 2,
-    borderLeftWidth: 5,
-    borderLeftColor: "#0984e3",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    overflow: "hidden",
   },
   instHeader: {
+    padding: 15,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 15,
+    backgroundColor: "#fdfdfd",
     borderBottomWidth: 1,
     borderBottomColor: "#f1f2f6",
-    paddingBottom: 10,
   },
-  instName: { fontSize: 18, fontWeight: "bold", color: "#2d3436" },
+  instName: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2d3436",
+  },
   instValuesContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
   },
-  instValueBlock: { flex: 1, alignItems: "center" },
+  instValueBlock: {
+    alignItems: "center",
+    marginLeft: 15,
+  },
   verticalDivider: {
     width: 1,
     height: "80%",
@@ -330,15 +399,57 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 2,
   },
-  instValueGray: { fontSize: 14, fontWeight: "bold", color: "#636e72" },
+  instValueGray: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#636e72",
+  },
   instLabelDestaque: {
     fontSize: 10,
     color: "#c0392b",
     fontWeight: "bold",
     marginBottom: 2,
   },
-  instValueDestaque: { fontSize: 18, fontWeight: "bold", color: "#c0392b" },
-  // Outros
+  instValueDestaque: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#c0392b",
+  },
+  contasListInsideGroup: {
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    paddingBottom: 5,
+  },
+  card: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    marginBottom: 10,
+    padding: 12,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0.5 },
+    shadowOpacity: 0.08,
+    shadowRadius: 1,
+    borderLeftWidth: 4,
+    alignItems: "center",
+  },
+  cardLeft: {
+    width: 45,
+    alignItems: "center",
+    marginRight: 10,
+    paddingRight: 5,
+    borderRightWidth: 1,
+    borderRightColor: "#f1f2f6",
+  },
+  dayText: { fontSize: 18, fontWeight: "bold", color: "#2d3436" },
+  monthText: { fontSize: 10, color: "#636e72", fontWeight: "bold" },
+  cardInfo: { flex: 1 },
+  cardTitle: { fontSize: 15, fontWeight: "600", color: "#2d3436" },
+  cardStatus: { fontSize: 10, fontWeight: "bold", marginTop: 2 },
+  cardRight: { alignItems: "flex-end", justifyContent: "center" },
+  labelValor: { fontSize: 10, color: "#b2bec3" },
+  valueText: { fontSize: 15, fontWeight: "bold" },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -347,12 +458,12 @@ const styles = StyleSheet.create({
   emptyText: { marginTop: 10, color: "#b2bec3", fontSize: 16 },
   fab: {
     position: "absolute",
-    bottom: 20,
+    bottom: 50,
     right: 20,
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#2d3436",
+    backgroundColor: "#0984e3",
     justifyContent: "center",
     alignItems: "center",
     elevation: 5,

@@ -162,8 +162,9 @@ export default function TelaPagamento({ navigation, route }) {
           {/* Resumo da Conta */}
           <View style={styles.cardResumo}>
             <Text style={styles.labelResumo}>PAGANDO CONTA DE:</Text>
-            <Text style={styles.valorResumo}>{conta.instituicao}</Text>
-            <Text style={styles.descResumo}>{conta.descricao}</Text>
+            <Text style={styles.valorResumo}>{conta.descricao}</Text>
+            <Text style={styles.descResumo}>{conta.instituicao}</Text>
+            <Text style={styles.descResumo}>{conta.observacao}</Text>
 
             <View style={styles.divisor} />
 

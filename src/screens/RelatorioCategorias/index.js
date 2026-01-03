@@ -139,17 +139,13 @@ export default function RelatorioCategorias({ route, navigation }) {
       if (diferenca > 0) {
         textoDiferenca = `Faltam R$ ${diferenca
           .toFixed(2)
-          .replace(".", ",")} (${metaPorcentagem
-          .toFixed(2)
-          .replace(".", ",")}%)`;
+          .replace(".", ",")} (${valorAlvo.toFixed(2).replace(".", ",")}%)`;
         corDiferenca = "#00b894"; // Verde
         porcentagemBarra = (item.valorAbsoluto / valorAlvo) * 100;
       } else {
         textoDiferenca = `Excedeu R$ ${Math.abs(diferenca)
           .toFixed(2)
-          .replace(".", ",")} (${metaPorcentagem
-          .toFixed(2)
-          .replace(".", ",")}%)`;
+          .replace(".", ",")} (${metaAjuste.toFixed(2).replace(".", ",")})`;
         corDiferenca = "#d63031"; // Vermelho
         porcentagemBarra = 100; // Barra cheia, mas o texto indica que excedeu
         corBarraFinal = "#d63031"; // --- ALTERAÇÃO 2: Barra vermelha se exceder a meta ---
@@ -291,7 +287,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    marginBottom: 50,
   },
   sectionHeader: {
     flexDirection: "row",
